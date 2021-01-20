@@ -20,6 +20,11 @@ executable poe-hs
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.14 && <4.15
+  build-depends:
+    process,
+    binary,
+    bytestring,
+    filepath,
+    base >=4.14 && <4.15
   -- hs-source-dirs:
   default-language:    Haskell2010
