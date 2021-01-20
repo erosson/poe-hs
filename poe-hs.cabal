@@ -20,6 +20,9 @@ executable poe-hs
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
+  ghc-options:
+    -Wall
+    -Werror
   build-depends:
     process,
     binary,
