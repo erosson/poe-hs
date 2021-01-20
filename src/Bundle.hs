@@ -1,14 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Main where
+module Bundle (Bundle(..), Header(..), get, decompress) where
 
-import qualified System.FilePath
-import System.Exit (die)
-import qualified System.Environment
-import qualified Data.ByteString.Lazy as ByteString
 import Data.ByteString.Lazy (ByteString)
-import qualified Data.Binary.Get as B
 import Data.Int (Int64)
--- import qualified System.Process
+import qualified Data.Binary.Get as B
+import qualified System.IO.Temp as Temp
 
 data Bundle = Bundle
   { header :: Header
@@ -25,23 +21,19 @@ data Header = Header
   }
   deriving (Show)
 
-main :: IO ()
-main = do
-  (argv :: [String]) <- System.Environment.getArgs
-  case argv of
-    [] -> die "usage: poe-hs <GGPK_PATH>"
-    (depotPath : _) -> do
-      let (indexPath :: String) = System.FilePath.joinPath [depotPath, "Bundles2", "_.index.bin"]
-      (indexBin :: ByteString) <- ByteString.readFile $ indexPath
-      case B.runGetOrFail parseBundle indexBin of
-        Left (_, _, err) -> die err
-        Right (bytesLeft, _, (index :: Bundle))
-          | bytesLeft /= ByteString.empty -> die "parsed bundle, but had bytes left over"
-          | otherwise -> do
-            putStrLn $ show $ header index
+get :: ByteString -> Either (ByteString, B.ByteOffset, String) (ByteString, B.ByteOffset, Bundle)
+get = B.runGetOrFail parse
 
-parseBundle :: B.Get Bundle
-parseBundle = do
+-- TODO streaming?
+decompress :: Bundle -> IO [ByteString]
+decompress _bundle =
+  Temp.withSystemTempDirectory "poe-hs-" $ \dirpath -> do
+    Temp.withTempFile dirpath "poe-hs-" $ \filepath _fd -> do
+      putStrLn filepath
+      return []
+
+parse :: B.Get Bundle
+parse = do
   -- hs binary parsing overview: https://wiki.haskell.org/Dealing_with_binary_data
   -- ggpk bundle format: https://github.com/poe-tool-dev/ggpk.discussion/wiki/Bundle-scheme
   _uncompressedSize32 <- B.getWord32le

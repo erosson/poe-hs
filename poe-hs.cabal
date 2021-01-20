@@ -18,12 +18,16 @@ extra-source-files:  CHANGELOG.md
 
 executable poe-hs
   main-is:             Main.hs
-  -- other-modules:
+  hs-source-dirs:
+    src
+  other-modules:
+    Bundle
   -- other-extensions:
   ghc-options:
     -Wall
     -Werror
   build-depends:
+    temporary,
     process,
     binary,
     bytestring,
