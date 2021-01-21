@@ -1,13 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Bundle (Bundle(..), Header(..), get, decompress) where
+module Bundle (Bundle(..), Header(..), get, decompressTo, decompress) where
 
+import Control.Monad (replicateM)
 import qualified Data.ByteString.Lazy as ByteString
 import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
 -- import qualified Data.Binary as Binary
 import qualified Data.Binary.Get as B
 import qualified Data.Binary.Put as BP
--- import qualified System.IO.Temp as Temp
+import qualified System.IO.Temp as Temp
 import qualified System.Process as Process
 import System.Exit (die, ExitCode(ExitFailure, ExitSuccess))
 import qualified System.Directory as Directory
@@ -29,13 +30,18 @@ data Header = Header
   }
   deriving (Show)
 
+decompress :: Bundle -> IO ByteString
+decompress bundle =
+  Temp.withSystemTempDirectory "poe-hs" $ \tempDir -> decompressTo tempDir bundle
+
 -- | After reading a bundle, decompress it using ooz.exe/libooz.
--- Decompressing the entire bundle in memory will fail for large bundles - but
--- Haskell's lazy, so we can iterate even a large list of results. (I think.)
-decompress :: FilePath -> Bundle -> IO [ByteString]
-decompress outputDir bundle = do
+-- Decompressing the entire bundle in memory would fail for large bundles - but
+-- bytestrings (and Haskell) are lazy, so we can return even large bundles here
+-- without choking. (I think!)
+decompressTo :: FilePath -> Bundle -> IO ByteString
+decompressTo outputDir bundle = do
   Directory.createDirectoryIfMissing True outputDir
-  mapM (decompressBlock outputDir bundle) $ zipWith (,) [0..] $ blocks bundle
+  fmap ByteString.concat $ mapM (decompressBlock outputDir bundle) $ zipWith (,) [0..] $ blocks bundle
 
 decompressBlock :: FilePath -> Bundle -> (Int, ByteString) -> IO ByteString
 decompressBlock outputRoot bundle (blockNum, block) = do
@@ -101,8 +107,8 @@ parseHeader = do
   compressedSize' <- fmap fromIntegral B.getWord64le
   blockCount' <- fmap fromIntegral B.getWord32le
   uncompressedBlockGranularity' <- fmap fromIntegral B.getWord32le
-  _unk28 <- parseList 4 B.getWord32le
-  blockSizes' <- parseList blockCount' $ fmap fromIntegral B.getWord32le
+  _unk28 <- replicateM 4 B.getWord32le
+  blockSizes' <- replicateM blockCount' $ fmap fromIntegral B.getWord32le
   return $ Header
     firstFileEncode'
     uncompressedSize'
@@ -110,11 +116,3 @@ parseHeader = do
     blockCount'
     uncompressedBlockGranularity'
     blockSizes'
-
-parseList :: Int -> B.Get a -> B.Get [a]
-parseList len getfn
-  | len <= 0 = return []
-  | otherwise = do
-      val <- getfn
-      tail' <- parseList (len-1) getfn
-      return $ val : tail'

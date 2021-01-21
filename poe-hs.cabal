@@ -21,12 +21,14 @@ executable poe-hs
   hs-source-dirs:
     src
   other-modules:
+    IndexBundle,
     Bundle
   -- other-extensions:
   ghc-options:
     -Wall
     -Werror
   build-depends:
+    aeson,
     directory,
     temporary,
     process,
