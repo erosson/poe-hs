@@ -3,8 +3,11 @@ module Bundle (Bundle(..), Header(..), get, decompress) where
 
 import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
+import qualified Data.Binary
 import qualified Data.Binary.Get as B
 import qualified System.IO.Temp as Temp
+import qualified System.Process as Process
+import System.Exit (die, ExitCode(ExitFailure, ExitSuccess))
 
 data Bundle = Bundle
   { header :: Header
@@ -24,13 +27,26 @@ data Header = Header
 get :: ByteString -> Either (ByteString, B.ByteOffset, String) (ByteString, B.ByteOffset, Bundle)
 get = B.runGetOrFail parse
 
--- TODO streaming?
+-- TODO decompressing the entire bundle in memory will fail for large bundles
 decompress :: Bundle -> IO [ByteString]
-decompress _bundle =
-  Temp.withSystemTempDirectory "poe-hs-" $ \dirpath -> do
-    Temp.withTempFile dirpath "poe-hs-" $ \filepath _fd -> do
-      putStrLn filepath
-      return []
+decompress bundle =
+  Temp.withSystemTempDirectory "poe-hs-" $ \tempdir -> do
+    mapM (decompressBlock tempdir) $ zipWith (,) [0..] $ blocks bundle
+
+decompressBlock :: FilePath -> (Int, ByteString) -> IO ByteString
+decompressBlock tempdir (_blocknum, block) = do
+  -- emptyTempFile does not delete the file, like withTempFile would do - but
+  -- withTempFile would open the file, so Data.Binary.encodeFile can't use it.
+  -- withSystemTempDirectory above deletes it later anyway.
+  filepath <- Temp.emptyTempFile tempdir "poe-hs-"
+  Data.Binary.encodeFile filepath block
+  cmd <- Process.readProcessWithExitCode "./ooz.exe" ["-d", filepath, filepath ++ ".out"] ""
+  case cmd of
+    (ExitFailure code, stderr, stdout) ->
+      die $ "ooz.exe failed, exit " ++ show code ++ ": \n" ++ stderr ++ "\n" ++ stdout
+    (ExitSuccess, _stderr, _stdout) ->
+      -- TODO read output file
+      return block
 
 parse :: B.Get Bundle
 parse = do
