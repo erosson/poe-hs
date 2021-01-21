@@ -27,6 +27,7 @@ executable poe-hs
     -Wall
     -Werror
   build-depends:
+    directory,
     temporary,
     process,
     binary,
